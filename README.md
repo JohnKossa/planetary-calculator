@@ -1,4 +1,4 @@
-#What is this thing?
+# What is this thing?
 I wanted to make an engine you could plug equations into and it reduces infinite plausible ranges down into constrained plausible ranges and possibly into finite values.
 
 It's named Planetary Calculator because the initial use case (and reason for creating this) is to be able to "build" a planet by specifying a minimal amount of information and letting the set of equations tell you everything else that can be gleaned from what you provided. For instance, the density of a planet can be determined by its elemental composition or by things known about its radius and orbit.
