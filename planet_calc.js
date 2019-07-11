@@ -183,15 +183,21 @@ let myEquations = {
 	density: new Equation(["radius", "mass", "density"],{
 		density: ({mass, radius})=> mass / (4/3 * Math.PI * Math.pow(radius,3)),
 		radius: ({density, mass}) => Math.cbrt( mass / density * 3/4 / Math.PI ),
-		mass: ({}) => {throw "Not Implemented"}
-	}, "sphericalDensity")
+		mass: ({density, radius}) => (Math.PI * 4 / 3 * Math.pow(radius, 3)) / density
+	}, "sphericalDensity"),
+	acc_g_surface: new Equation(["acc_g", "mass", "radius"], {
+		acc_g: ({mass, radius}) => (6.67408 * Math.pow(10, -11)*mass/Math.pow(radius, 2))/9.8,
+		mass: ({acc_g, radius}) => (9.8*acc_g*Math.pow(radius, 2))/(6.67408 * Math.pow(10, -11)),
+		radius: ({acc_g, mass}) => Math.sqrt((6.67408 * Math.pow(10, -11)*mass)/(acc_g*9.8))
+	}, "accelerationGsAtSurface")
 };
 let myBag = new VariableBag();
-myBag.addVariable(new Variable(VARIABLE_TYPE.GIVEN, "km", "radius"));
-myBag.addVariable(new Variable(VARIABLE_TYPE.GIVEN, "kg", "mass"));
+myBag.addVariable(new Variable(VARIABLE_TYPE.GIVEN, "m", "radius"));
+myBag.addVariable(new Variable(VARIABLE_TYPE.GIVEN, "g", "acc_g"));
+//myBag.addVariable(new Variable(VARIABLE_TYPE.GIVEN, "kg", "mass"));
 //myBag.addVariable(new Variable(VARIABLE_TYPE.GIVEN, "kg/m^3", "density"));
 myBag.variables["radius"].updateValue(VALUE_TYPE.CONSTRAINED_RANGE, [1, 200]);
-myBag.variables["mass"].updateValue(VALUE_TYPE.CONSTRAINED_RANGE, [100, 1000]);
+myBag.variables["acc_g"].updateValue(VALUE_TYPE.CONSTRAINED_RANGE, [100, 1000]);
 
 function computeCycle(){
 	let excludedEquations = [];
