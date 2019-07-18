@@ -1,7 +1,8 @@
 const VARIABLE_TYPE = {
 	GIVEN: 1,
 	DERIVED: 2,
-	ASSUMED: 3
+	ASSUMED: 3,
+	UNKNOWN: 4
 };
 
 const VALUE_TYPE = {
@@ -9,6 +10,11 @@ const VALUE_TYPE = {
 	CONSTRAINED_RANGE: 2,
 	UNCONSTRAINED_RANGE: 1
 };
+
+Object.filter = (obj, predicate) =>
+	Object.keys(obj)
+		.filter( key => predicate(obj[key]) )
+		.reduce( (res, key) => (res[key] = obj[key], res), {} );
 
 function getValueTypeFromValue(value){
 	if(!Array.isArray(value)){
@@ -90,12 +96,13 @@ class Equation{
 		* Applies if bag contains all variables in manifest or all variables but one
 		* */
 
-		let diffSet = this.variables.filter(x => !(x in variableBag.variables));
+		let nonUnconstrainedVariables = Object.filter(variableBag.variables, x=> x.valueType !== VALUE_TYPE.UNCONSTRAINED_RANGE);
+		let diffSet = this.variables.filter(x => !(x in nonUnconstrainedVariables));
 		let hasEnoughVariables = diffSet.length <=1;
-		//TODO check to make sure computable variables are not already finite
 		console.log(`Equation ${this.name} differs by [${diffSet}] and ${hasEnoughVariables?'has enough variables':"doesn't have enough variables"}`);
-
-		return hasEnoughVariables
+		//TODO check to make sure computable variables are not already finite
+		let atLeastOneVariableNonFinite = true;
+		return hasEnoughVariables && atLeastOneVariableNonFinite;
 	}
 	chooseForm(variableBag){
 		/*
@@ -114,7 +121,7 @@ class Equation{
 		let diffSet = this.variables.filter(x => !(x in variableBag.variables));
 		if(diffSet.length === 0){
 			let variables = Object.values(variableBag.variables).filter(x => this.variables.includes(x.name));
-			variables.sort(x => x.valueType);
+			variables.sort((x,y) => x.valueType - y.valueType);
 			switch(variables[0].valueType){
 				case VALUE_TYPE.FINITE:
 					throw Error(`In Equation.chooseForm: Value type is FINITE, this function fails its precondition`);
@@ -151,7 +158,9 @@ class Equation{
 		* TODO this algorithm will not work if equation's most extreme values occur at values in the middle of the input ranges
 		* */
 		let sets = [{}];
-		for(let variable of Object.values(variableBag.variables)){
+		let nonUnconstrainedVariables = Object.filter(variableBag.variables, x=> x.valueType !== VALUE_TYPE.UNCONSTRAINED_RANGE);
+		//for(let variable of Object.values(variableBag.variables)){
+		for(let variable of Object.values(nonUnconstrainedVariables)){
 			switch(variable.valueType) {
 				case VALUE_TYPE.FINITE:
 					sets.forEach(el => el[variable.name] = variable.value);
@@ -190,19 +199,21 @@ let myEquations = {
 		mass: ({density, radius}) => (Math.PI * 4 / 3 * Math.pow(radius, 3)) / density
 	}, "sphericalDensity"),
 	acc_g_surface: new Equation(["acc_g", "mass", "radius"], {
-		acc_g: ({mass, radius}) => (6.67408 * Math.pow(10, -11)*mass/Math.pow(radius, 2))/9.8,
-		mass: ({acc_g, radius}) => (9.8*acc_g*Math.pow(radius, 2))/(6.67408 * Math.pow(10, -11)),
-		radius: ({acc_g, mass}) => Math.sqrt((6.67408 * Math.pow(10, -11)*mass)/(acc_g*9.8))
-	}, "accelerationGsAtSurface")
+		acc_g: ({mass, radius}) => (GRAVITATIONAL_CONSTANT*mass/Math.pow(radius, 2))/EARTH_ACCg,
+		mass: ({acc_g, radius}) => (EARTH_ACCg*acc_g*Math.pow(radius, 2))/(6.67408 * Math.pow(10, -11)),
+		radius: ({acc_g, mass}) => Math.sqrt(GRAVITATIONAL_CONSTANT*mass/(acc_g*EARTH_ACCg))
+	}, "accelerationGsAtSurface"),
+	orbital_velocity_from_sun_mass: new Equation(["sun_mass", "orbital_velocity", "orbital_radius"], {
+		orbital_velocity: ({sun_mass, orbital_radius}) => Math.sqrt(GRAVITATIONAL_CONSTANT * sun_mass / orbital_radius),
+		orbital_radius: ({sun_mass, orbital_velocity})=> GRAVITATIONAL_CONSTANT * sun_mass / Math.pow(orbital_velocity, 2),
+		sun_mass: ({orbital_velocity, orbital_radius}) => Math.pow(orbital_velocity, 2) * orbital_radius / GRAVITATIONAL_CONSTANT
+	}, "orbitalVelocityFromSunMass"),
+	orbital_velocity_from_period: new Equation(["orbital_velocity", "orbital_period", "orbital_radius"],{
+		orbital_velocity: ({orbital_period, orbital_radius}) => 2 * Math.PI * orbital_radius / (orbital_period * SECONDS_PER_DAY),
+		orbital_period: ({orbital_velocity, orbital_radius}) => (2 * Math.PI * orbital_radius / orbital_velocity) / SECONDS_PER_DAY,
+		orbital_radius: ({orbital_velocity, orbital_period}) => orbital_velocity * orbital_period * SECONDS_PER_DAY / (2 * Math.PI)
+	}, "orbitalVelocityFromPeriod")
 };
-
-let myBag = new VariableBag();
-myBag.addVariable(new Variable(VARIABLE_TYPE.GIVEN, "m", "radius"));
-myBag.addVariable(new Variable(VARIABLE_TYPE.GIVEN, "g", "acc_g"));
-//myBag.addVariable(new Variable(VARIABLE_TYPE.GIVEN, "kg", "mass"));
-//myBag.addVariable(new Variable(VARIABLE_TYPE.GIVEN, "kg/m^3", "density"));
-myBag.variables["radius"].updateValue(VALUE_TYPE.CONSTRAINED_RANGE, [1, 200]);
-myBag.variables["acc_g"].updateValue(VALUE_TYPE.CONSTRAINED_RANGE, [100, 1000]);
 
 function computeCycle(){
 	let excludedEquations = [];
@@ -252,11 +263,27 @@ function computeCycle(){
 		//if no value update, add equation to the excludedEquations list
 		console.log(`Cycle ${cycleCount} completed`);
 		cycleCount++;
-	}while(keepGoing && cycleCount < 1000)
+	}while(keepGoing && cycleCount < 10);
+	console.log(myBag.variables);
 }
 
-myBag.addVariable(new Variable(VARIABLE_TYPE.GIVEN, "km", "radius"));
-myBag.addVariable(new Variable(VARIABLE_TYPE.GIVEN, "kg", "mass"));
-myBag.variables["radius"].updateValue(VALUE_TYPE.CONSTRAINED_RANGE, [1, 200]);
-myBag.variables["mass"].updateValue(VALUE_TYPE.CONSTRAINED_RANGE, [100, 1000]);
-computeCycle();
+const GRAVITATIONAL_CONSTANT = 6.67408 * Math.pow(10, -11);
+const EARTH_ACCg = 9.8;
+const SECONDS_PER_DAY = 24*60*60;
+const SECONDS_PER_YEAR = 365.25*SECONDS_PER_DAY;
+
+
+let myBag = new VariableBag();
+myBag.addVariable(new Variable(VARIABLE_TYPE.GIVEN, "m", "radius"));
+myBag.addVariable(new Variable(VARIABLE_TYPE.GIVEN, "g", "acc_g"));
+myBag.addVariable(new Variable(VARIABLE_TYPE.UNKNOWN, "kg", "mass"));
+myBag.addVariable(new Variable(VARIABLE_TYPE.UNKNOWN, "kg/m^3", "density"));
+myBag.addVariable(new Variable(VARIABLE_TYPE.UNKNOWN, "kg", "sun_mass"));
+myBag.addVariable(new Variable(VARIABLE_TYPE.UNKNOWN, "m/s", "orbital_velocity"));
+myBag.addVariable(new Variable(VARIABLE_TYPE.UNKNOWN, "m", "orbital_radius"));
+myBag.addVariable(new Variable(VARIABLE_TYPE.UNKNOWN, "days", "orbital_period"));
+myBag.variables["radius"].updateValue(VALUE_TYPE.CONSTRAINED_RANGE, [6370000, 6371000]);
+myBag.variables["acc_g"].updateValue(VALUE_TYPE.CONSTRAINED_RANGE, [.99, 1.01]);
+myBag.variables["orbital_radius"].updateValue(VALUE_TYPE.CONSTRAINED_RANGE, [149600000000, 149700000000]);
+myBag.variables["orbital_period"].updateValue(VALUE_TYPE.CONSTRAINED_RANGE, [365, 366]);
+//computeCycle();

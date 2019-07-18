@@ -1,20 +1,68 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <script src="planet_calc.js"></script>
-    <title>Title</title>
+	<meta charset="UTF-8">
+	<script src="jquery-3.4.1.min.js"></script>
+	<script src="planet_calc.js"></script>
+	<!--<script src="utils.js"></script>-->
+	<title>Title</title>
+	<style>
+		#variables label{
+			display: inline-block;
+			min-width: 200px;
+		}
+	</style>
 </head>
 <body>
-<style>
-    #thebutton{
-        transform: translateX(20px);
-    }
-    #thebutton:hover{
-        transform: scale(.01)
-    }
-</style>
-<button id="thebutton">This is a button</button>
+<div id="variables">
 
+</div>
+<button id="run-button">Run it</button>
+<button id="clear-button">Clear All</button>
+
+<script>
+	$(function(){
+
+		function renderVariable(units, name) {
+			let inputs = $(`<input type='text' name='${name}1'/><input type='text' name="${name}2"/>`);
+			let label = $(`<label> ${name} ${units}</label>`);
+			let wrapper = $(`<div data-variable-name="${name}"></div>`);
+			wrapper.append(label).append(inputs);
+			$("#variables").append(wrapper);
+		}
+		function renderVariableBag(variableBag){
+			for(let variable of Object.values(variableBag.variables)){
+				renderVariable(variable.unit, variable.name);
+			}
+		}
+		function loadVariables(variableBag){
+			for(let variable of Object.values(variableBag.variables)){
+				let targetDiv = $(`#variables div[data-variable-name=${variable.name}]`);
+				if(Array.isArray(variable.value)){
+					$("input:first", targetDiv).val(variable.value[0]);
+					$("input:last", targetDiv).val(variable.value[1]);
+				}else{
+					$("input", targetDiv).val(variable.value);
+				}
+			}
+		}
+		function clearVariables(){
+			$("#variables input").val("");
+		}
+		function triggerComputation(){
+			//load values from inputs
+			//call computeCycle
+			clearVariables()
+			computeCycle();;
+			loadVariables(myBag);
+		}
+		renderVariableBag(myBag);
+		loadVariables(myBag);
+		$("#clear-button").click(clearVariables)
+		$("#run-button").click(function(){
+			triggerComputation();
+		})
+	})
+</script>
 </body>
 </html>
